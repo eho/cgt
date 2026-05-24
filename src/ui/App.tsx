@@ -1,7 +1,6 @@
 import {
   BarChart3,
   Building2,
-  Calculator,
   FileDown,
   Info,
   Pencil,
@@ -50,7 +49,7 @@ export function App() {
       return null;
     }
 
-    return compareAssetScenario(selectedAsset, state.scenario, state.profile);
+    return compareAssetScenario(effectiveAssetForCalculation(selectedAsset), state.scenario, state.profile);
   }, [selectedAsset, state.profile, state.scenario]);
 
   function updateProfile(patch: Partial<TaxProfile>) {
@@ -67,7 +66,7 @@ export function App() {
           ? patch.saleDate ?? selectedAsset?.plannedSaleDate ?? current.scenario.saleDate
           : patch.saleDate ?? current.scenario.saleDate,
         saleProceeds: patch.assetId
-          ? patch.saleProceeds ?? selectedAsset?.plannedSalePrice ?? selectedAsset?.currentValue ?? current.scenario.saleProceeds
+          ? patch.saleProceeds ?? plannedSaleTotal(selectedAsset) ?? selectedAsset?.currentValue ?? current.scenario.saleProceeds
           : patch.saleProceeds ?? current.scenario.saleProceeds,
         sellingCosts: patch.assetId
           ? patch.sellingCosts ?? selectedAsset?.saleCostEstimate ?? current.scenario.sellingCosts
@@ -102,7 +101,7 @@ export function App() {
           ...current.scenario,
           assetId,
           saleDate: asset?.plannedSaleDate ?? current.scenario.saleDate,
-          saleProceeds: asset?.plannedSalePrice ?? asset?.currentValue ?? current.scenario.saleProceeds,
+          saleProceeds: plannedSaleTotal(asset) ?? asset?.currentValue ?? current.scenario.saleProceeds,
           sellingCosts: asset?.saleCostEstimate ?? current.scenario.sellingCosts,
         },
       };
@@ -139,12 +138,13 @@ export function App() {
       valueAtPolicyStart: kind === "share_parcel" ? 72_000 : 840_000,
       saleCostEstimate: kind === "share_parcel" ? 300 : 22_000,
       plannedSaleDate: "2028-09-01",
+      plannedSaleUnitPrice: kind === "share_parcel" ? 150 : undefined,
       plannedSalePrice: kind === "share_parcel" ? 75_000 : 860_000,
       isEligibleNewBuild: false,
       annualRent: kind === "residential_property" ? 34_000 : undefined,
       loanBalance: kind === "residential_property" ? 650_000 : undefined,
       interestRate: kind === "residential_property" ? 0.065 : undefined,
-      annualInterest: kind === "residential_property" ? 42_000 : undefined,
+      annualInterest: undefined,
       annualDeductibleExpenses: kind === "residential_property" ? 7_000 : undefined,
       annualDepreciation: kind === "residential_property" ? 3_000 : undefined,
     };
@@ -156,7 +156,7 @@ export function App() {
         ...current.scenario,
         assetId: id,
         saleDate: asset.plannedSaleDate ?? current.scenario.saleDate,
-        saleProceeds: asset.plannedSalePrice ?? asset.currentValue,
+        saleProceeds: plannedSaleTotal(asset) ?? asset.currentValue,
         sellingCosts: asset.saleCostEstimate ?? current.scenario.sellingCosts,
       },
     }));
@@ -320,10 +320,11 @@ function PortfolioScreen({
                 ...scenario,
                 assetId: asset.id,
                 saleDate: asset.plannedSaleDate ?? scenario.saleDate,
-                saleProceeds: asset.plannedSalePrice ?? asset.currentValue,
+                saleProceeds: plannedSaleTotal(asset) ?? asset.currentValue,
                 sellingCosts: asset.saleCostEstimate ?? scenario.sellingCosts,
               };
-              const comparison = compareAssetScenario(asset, assetScenario, profile);
+                const effectiveAsset = effectiveAssetForCalculation(asset);
+                const comparison = compareAssetScenario(effectiveAsset, assetScenario, profile);
                 const ng = comparison.negativeGearing;
                 return (
                   <tr key={asset.id} className={scenario.assetId === asset.id ? "selectedRow" : ""}>
@@ -335,11 +336,11 @@ function PortfolioScreen({
                     </td>
                     <td>{assetKindLabel(asset.kind)}</td>
                     <td>{asset.acquisitionDate}</td>
-                    <td>{money(asset.costBase * asset.ownershipShare)}</td>
-                    <td>{money(asset.currentValue * asset.ownershipShare)}</td>
-                    <td>{money((asset.currentValue - asset.costBase) * asset.ownershipShare)}</td>
+                    <td>{money(effectiveAsset.costBase * asset.ownershipShare)}</td>
+                    <td>{money(effectiveAsset.currentValue * asset.ownershipShare)}</td>
+                    <td>{money((effectiveAsset.currentValue - effectiveAsset.costBase) * asset.ownershipShare)}</td>
                     <td>
-                      <ExposureBadges asset={asset} result={comparison} />
+                      <ExposureBadges asset={effectiveAsset} result={comparison} />
                     </td>
                     <td>
                       <span className={`badge ${ng.status === "quarantined" ? "danger" : "neutral"}`}>
@@ -388,14 +389,29 @@ function AssetDetailEditor({
 }) {
   const isProperty = asset.kind === "residential_property" || asset.kind === "commercial_property";
   const propertyCostBase =
-    (asset.purchasePrice ?? 0) +
-    (asset.stampDuty ?? 0) +
-    (asset.buyingCosts ?? 0) +
-    (asset.capitalImprovements ?? 0);
-  const shareCostBase =
-    (asset.units ?? 0) * (asset.costPerUnit ?? 0) + (asset.brokerage ?? 0) + (asset.costBaseAdjustments ?? 0);
+    calculatedPropertyCostBase(asset);
+  const shareCostBase = calculatedShareCostBase(asset);
   const calculatedCurrentValue = calculatedShareCurrentValue(asset);
   const calculatedPolicyStartValue = calculatedSharePolicyStartValue(asset);
+  const calculatedExpectedSaleValue = calculatedShareExpectedSaleValue(asset);
+  const calculatedAnnualInterest = calculatedPropertyAnnualInterest(asset);
+
+  function updatePropertyCostBase(patch: Partial<Asset>) {
+    const nextAsset = { ...asset, ...patch };
+    onChange({ ...patch, costBase: calculatedPropertyCostBase(nextAsset) });
+  }
+
+  function updateShareInputs(patch: Partial<Asset>) {
+    const nextAsset = { ...asset, ...patch };
+    const nextPatch = {
+      ...patch,
+      costBase: calculatedShareCostBase(nextAsset),
+      currentValue: calculatedShareCurrentValue(nextAsset),
+      valueAtPolicyStart: calculatedSharePolicyStartValue(nextAsset),
+      plannedSalePrice: calculatedShareExpectedSaleValue(nextAsset),
+    };
+    updateScenarioAndAsset({ saleProceeds: nextPatch.plannedSalePrice }, nextPatch);
+  }
 
   function updateKind(kind: AssetKind) {
     onChange({
@@ -466,27 +482,24 @@ function AssetDetailEditor({
           <h3 className="formSectionTitle">Property cost base</h3>
           <label>
             Purchase price
-            <MoneyInput value={asset.purchasePrice ?? 0} onChange={(purchasePrice) => onChange({ purchasePrice })} />
+            <MoneyInput value={asset.purchasePrice ?? 0} onChange={(purchasePrice) => updatePropertyCostBase({ purchasePrice })} />
           </label>
           <label>
             Stamp duty
-            <MoneyInput value={asset.stampDuty ?? 0} onChange={(stampDuty) => onChange({ stampDuty })} />
+            <MoneyInput value={asset.stampDuty ?? 0} onChange={(stampDuty) => updatePropertyCostBase({ stampDuty })} />
           </label>
           <label>
             Buying costs
-            <MoneyInput value={asset.buyingCosts ?? 0} onChange={(buyingCosts) => onChange({ buyingCosts })} />
+            <MoneyInput value={asset.buyingCosts ?? 0} onChange={(buyingCosts) => updatePropertyCostBase({ buyingCosts })} />
           </label>
           <label>
             Capital improvements
-            <MoneyInput value={asset.capitalImprovements ?? 0} onChange={(capitalImprovements) => onChange({ capitalImprovements })} />
+            <MoneyInput value={asset.capitalImprovements ?? 0} onChange={(capitalImprovements) => updatePropertyCostBase({ capitalImprovements })} />
           </label>
           <label>
-            Cost base used
-            <MoneyInput value={asset.costBase} onChange={(costBase) => onChange({ costBase })} />
+            Calculated cost base
+            <CalculatedValue value={propertyCostBase} formula="Purchase + stamp duty + buying costs + improvements" />
           </label>
-          <button className="secondaryButton span2" onClick={() => onChange({ costBase: propertyCostBase })}>
-            <Calculator size={16} /> Use property cost components
-          </button>
           <h3 className="formSectionTitle">Valuation and sale</h3>
           <label>
             Current value
@@ -528,8 +541,12 @@ function AssetDetailEditor({
             <PercentInput value={asset.interestRate ?? 0} onChange={(interestRate) => onChange({ interestRate })} />
           </label>
           <label>
-            Annual interest
-            <MoneyInput value={asset.annualInterest ?? 0} onChange={(annualInterest) => onChange({ annualInterest })} />
+            Calculated annual interest
+            <CalculatedValue value={calculatedAnnualInterest} formula="Loan balance x interest rate" />
+          </label>
+          <label>
+            Annual interest override
+            <OptionalMoneyInput value={asset.annualInterest} onChange={(annualInterest) => onChange({ annualInterest })} />
           </label>
           <label>
             Annual rent
@@ -561,41 +578,32 @@ function AssetDetailEditor({
             Units
             <NumberInput
               value={asset.units ?? 0}
-              onChange={(units) =>
-                onChange({
-                  units,
-                  currentValue: units * (asset.currentPrice ?? 0),
-                  valueAtPolicyStart: units * (asset.priceAtPolicyStart ?? 0),
-                })
-              }
+              onChange={(units) => updateShareInputs({ units })}
             />
           </label>
           <label>
             Cost per unit
-            <MoneyInput step={0.01} value={asset.costPerUnit ?? 0} onChange={(costPerUnit) => onChange({ costPerUnit })} />
+            <MoneyInput step={0.01} value={asset.costPerUnit ?? 0} onChange={(costPerUnit) => updateShareInputs({ costPerUnit })} />
           </label>
           <label>
             Brokerage
-            <MoneyInput value={asset.brokerage ?? 0} onChange={(brokerage) => onChange({ brokerage })} />
+            <MoneyInput value={asset.brokerage ?? 0} onChange={(brokerage) => updateShareInputs({ brokerage })} />
           </label>
           <label>
             Cost-base adjustments
-            <MoneyInput value={asset.costBaseAdjustments ?? 0} onChange={(costBaseAdjustments) => onChange({ costBaseAdjustments })} />
+            <MoneyInput value={asset.costBaseAdjustments ?? 0} onChange={(costBaseAdjustments) => updateShareInputs({ costBaseAdjustments })} />
           </label>
           <label>
-            Cost base used
-            <MoneyInput value={asset.costBase} onChange={(costBase) => onChange({ costBase })} />
+            Calculated cost base
+            <CalculatedValue value={shareCostBase} formula="Units x cost per unit + brokerage + adjustments" />
           </label>
-          <button className="secondaryButton span2" onClick={() => onChange({ costBase: shareCostBase })}>
-            <Calculator size={16} /> Use parcel cost components
-          </button>
           <h3 className="formSectionTitle">Price and sale</h3>
           <label>
             Current unit price
             <MoneyInput
               step={0.01}
               value={asset.currentPrice ?? 0}
-              onChange={(currentPrice) => onChange({ currentPrice, currentValue: (asset.units ?? 0) * currentPrice })}
+              onChange={(currentPrice) => updateShareInputs({ currentPrice })}
             />
           </label>
           <label>
@@ -607,9 +615,7 @@ function AssetDetailEditor({
             <MoneyInput
               step={0.01}
               value={asset.priceAtPolicyStart ?? 0}
-              onChange={(priceAtPolicyStart) =>
-                onChange({ priceAtPolicyStart, valueAtPolicyStart: (asset.units ?? 0) * priceAtPolicyStart })
-              }
+              onChange={(priceAtPolicyStart) => updateShareInputs({ priceAtPolicyStart })}
             />
           </label>
           <label>
@@ -625,11 +631,16 @@ function AssetDetailEditor({
             />
           </label>
           <label>
-            Expected sale price
+            Expected sale unit price
             <MoneyInput
-              value={scenario.saleProceeds}
-              onChange={(saleProceeds) => updateScenarioAndAsset({ saleProceeds }, { plannedSalePrice: saleProceeds })}
+              step={0.01}
+              value={asset.plannedSaleUnitPrice ?? 0}
+              onChange={(plannedSaleUnitPrice) => updateShareInputs({ plannedSaleUnitPrice })}
             />
+          </label>
+          <label>
+            Expected sale value
+            <CalculatedValue value={calculatedExpectedSaleValue} formula="Units x Expected sale unit price" />
           </label>
           <label>
             Selling costs
@@ -690,7 +701,10 @@ function ScenarioScreen({
           </label>
           <label>
             Cost base
-            <MoneyInput value={asset.costBase} onChange={(costBase) => onAssetChange({ costBase })} />
+            <CalculatedValue
+              value={effectiveAssetForCalculation(asset).costBase}
+              formula={asset.kind === "share_parcel" ? "Parcel cost components" : "Property cost components"}
+            />
           </label>
           <label>
             Current value
@@ -713,9 +727,27 @@ function ScenarioScreen({
             <input type="date" value={scenario.saleDate} onChange={(event) => onScenarioChange({ saleDate: event.target.value })} />
           </label>
           <label>
-            Expected sale price
-            <MoneyInput value={scenario.saleProceeds} onChange={(saleProceeds) => onScenarioChange({ saleProceeds })} />
+            {asset.kind === "share_parcel" ? "Expected sale unit price" : "Expected sale price"}
+            {asset.kind === "share_parcel" ? (
+              <MoneyInput
+                step={0.01}
+                value={asset.plannedSaleUnitPrice ?? 0}
+                onChange={(plannedSaleUnitPrice) => {
+                  const saleProceeds = (asset.units ?? 0) * plannedSaleUnitPrice;
+                  onAssetChange({ plannedSaleUnitPrice, plannedSalePrice: saleProceeds });
+                  onScenarioChange({ saleProceeds });
+                }}
+              />
+            ) : (
+              <MoneyInput value={scenario.saleProceeds} onChange={(saleProceeds) => onScenarioChange({ saleProceeds })} />
+            )}
           </label>
+          {asset.kind === "share_parcel" && (
+            <label>
+              Expected sale value
+              <CalculatedValue value={calculatedShareExpectedSaleValue(asset)} formula="Units x Expected sale unit price" />
+            </label>
+          )}
           <label>
             Selling costs
             <MoneyInput value={scenario.sellingCosts} onChange={(sellingCosts) => onScenarioChange({ sellingCosts })} />
@@ -769,18 +801,15 @@ function ScenarioScreen({
               </label>
               <label>
                 Interest rate
-                <input
-                  type="number"
-                  min="0"
-                  max="1"
-                  step="0.001"
-                  value={asset.interestRate ?? 0}
-                  onChange={(event) => onAssetChange({ interestRate: Number(event.target.value) })}
-                />
+                <PercentInput value={asset.interestRate ?? 0} onChange={(interestRate) => onAssetChange({ interestRate })} />
               </label>
               <label>
-                Annual interest
-                <MoneyInput value={asset.annualInterest ?? 0} onChange={(annualInterest) => onAssetChange({ annualInterest })} />
+                Calculated annual interest
+                <CalculatedValue value={calculatedPropertyAnnualInterest(asset)} formula="Loan balance x interest rate" />
+              </label>
+              <label>
+                Annual interest override
+                <OptionalMoneyInput value={asset.annualInterest} onChange={(annualInterest) => onAssetChange({ annualInterest })} />
               </label>
               <label>
                 Deductible expenses
@@ -870,6 +899,8 @@ function ScenarioScreen({
 }
 
 function CompareScreen({ asset, scenario, profile }: { asset: Asset; scenario: SaleScenario; profile: TaxProfile }) {
+  const effectiveAsset = effectiveAssetForCalculation(asset);
+
   return (
     <section className="screenPanel">
       <div className="panelHeader">
@@ -882,7 +913,7 @@ function CompareScreen({ asset, scenario, profile }: { asset: Asset; scenario: S
         {scenarioPresets.map((preset) => {
           const nextScenario = { ...scenario, saleDate: preset.saleDate, cpiAtSale: preset.cpiAtSale };
           const nextProfile = { ...profile, nonCgtTaxableIncome: preset.income };
-          const result = compareAssetScenario(asset, nextScenario, nextProfile);
+          const result = compareAssetScenario(effectiveAsset, nextScenario, nextProfile);
           return (
             <article className="scenarioCard" key={preset.label}>
               <div className="scenarioCardHead">
@@ -1029,6 +1060,27 @@ function MoneyInput({ value, onChange, step = 1000 }: { value: number; onChange:
   return <input type="number" min="0" step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />;
 }
 
+function OptionalMoneyInput({
+  value,
+  onChange,
+  step = 1000,
+}: {
+  value?: number;
+  onChange: (value: number | undefined) => void;
+  step?: number;
+}) {
+  return (
+    <input
+      type="number"
+      min="0"
+      step={step}
+      placeholder="Use calculated value"
+      value={value ?? ""}
+      onChange={(event) => onChange(event.target.value === "" ? undefined : Number(event.target.value))}
+    />
+  );
+}
+
 function NumberInput({ value, onChange }: { value: number; onChange: (value: number) => void }) {
   return <input type="number" min="0" step="0.1" value={value} onChange={(event) => onChange(Number(event.target.value))} />;
 }
@@ -1056,9 +1108,83 @@ function CalculatedValue({ value, formula }: { value: number; formula: string })
 }
 
 function calculatedShareCurrentValue(asset: Asset): number {
-  return (asset.units ?? 0) * (asset.currentPrice ?? 0);
+  if (asset.units === undefined || asset.currentPrice === undefined) {
+    return asset.currentValue;
+  }
+
+  return asset.units * asset.currentPrice;
 }
 
 function calculatedSharePolicyStartValue(asset: Asset): number {
-  return (asset.units ?? 0) * (asset.priceAtPolicyStart ?? 0);
+  if (asset.units === undefined || asset.priceAtPolicyStart === undefined) {
+    return asset.valueAtPolicyStart ?? 0;
+  }
+
+  return asset.units * asset.priceAtPolicyStart;
+}
+
+function calculatedShareExpectedSaleValue(asset: Asset): number {
+  if (asset.units === undefined || asset.plannedSaleUnitPrice === undefined) {
+    return asset.plannedSalePrice ?? 0;
+  }
+
+  return asset.units * asset.plannedSaleUnitPrice;
+}
+
+function plannedSaleTotal(asset?: Asset): number | undefined {
+  if (!asset) {
+    return undefined;
+  }
+
+  if (asset.kind === "share_parcel" && asset.plannedSaleUnitPrice !== undefined) {
+    return calculatedShareExpectedSaleValue(asset);
+  }
+
+  return asset.plannedSalePrice;
+}
+
+function calculatedShareCostBase(asset: Asset): number {
+  if (asset.units === undefined || asset.costPerUnit === undefined) {
+    return asset.costBase;
+  }
+
+  return asset.units * asset.costPerUnit + (asset.brokerage ?? 0) + (asset.costBaseAdjustments ?? 0);
+}
+
+function calculatedPropertyCostBase(asset: Asset): number {
+  if (
+    asset.purchasePrice === undefined &&
+    asset.stampDuty === undefined &&
+    asset.buyingCosts === undefined &&
+    asset.capitalImprovements === undefined
+  ) {
+    return asset.costBase;
+  }
+
+  return (asset.purchasePrice ?? 0) + (asset.stampDuty ?? 0) + (asset.buyingCosts ?? 0) + (asset.capitalImprovements ?? 0);
+}
+
+function calculatedPropertyAnnualInterest(asset: Asset): number {
+  return (asset.loanBalance ?? 0) * (asset.interestRate ?? 0);
+}
+
+function effectiveAssetForCalculation(asset: Asset): Asset {
+  if (asset.kind === "share_parcel") {
+    return {
+      ...asset,
+      costBase: calculatedShareCostBase(asset),
+      currentValue: calculatedShareCurrentValue(asset),
+      valueAtPolicyStart: calculatedSharePolicyStartValue(asset),
+      plannedSalePrice: calculatedShareExpectedSaleValue(asset),
+    };
+  }
+
+  if (asset.kind === "residential_property" || asset.kind === "commercial_property") {
+    return {
+      ...asset,
+      costBase: calculatedPropertyCostBase(asset),
+    };
+  }
+
+  return asset;
 }

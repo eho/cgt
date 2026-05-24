@@ -30,6 +30,7 @@ export type Asset = {
   saleCostEstimate?: number;
   plannedSaleDate?: string;
   plannedSalePrice?: number;
+  plannedSaleUnitPrice?: number;
   isEligibleNewBuild?: boolean;
   loanBalance?: number;
   interestRate?: number;

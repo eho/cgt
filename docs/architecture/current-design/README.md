@@ -16,8 +16,8 @@ Asset data is stored locally in browser `localStorage`. There is no server, acco
 
 The portfolio editor supports the real-world entry fields needed for the MVP:
 
-- properties: address label, acquisition/contract date, settlement date, ownership share, purchase price, stamp duty, buying costs, capital improvements, cost base used, current value, 1 July 2027 value, expected sale date/price, selling costs, loan balance, interest rate, annual interest, rent, deductible expenses, depreciation/capital works, and eligible-new-build status;
-- share/ETF parcels: units, cost per unit, brokerage, cost-base adjustments, cost base used, current unit price, calculated current value, 1 July 2027 unit price/calculated value, expected sale date/price, and selling costs.
+- properties: address label, acquisition/contract date, settlement date, ownership share, purchase price, stamp duty, buying costs, capital improvements, calculated cost base, current value, 1 July 2027 value, expected sale date/price, selling costs, loan balance, interest rate, calculated annual interest, optional annual-interest override, rent, deductible expenses, depreciation/capital works, and eligible-new-build status;
+- share/ETF parcels: units, cost per unit, brokerage, cost-base adjustments, calculated cost base, current unit price, calculated current value, 1 July 2027 unit price/calculated value, expected sale date, expected sale unit price/calculated sale value, and selling costs.
 
 ## Calculation Modules
 

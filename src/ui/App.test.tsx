@@ -50,6 +50,8 @@ describe("App workspace", () => {
     expect(host.textContent).toContain("Asset details");
     expect(host.textContent).toContain("Purchase price");
     expect(host.textContent).toContain("Loan balance");
+    expect(host.textContent).toContain("Calculated cost base");
+    expect(host.textContent).toContain("Calculated annual interest");
     expect(host.textContent).toContain("Expected sale price");
 
     const nameInput = Array.from(host.querySelectorAll("input")).find((input) => input.value === "New investment property");
@@ -79,9 +81,13 @@ describe("App workspace", () => {
     });
 
     expect(host.textContent).toContain("Parcel cost base");
+    expect(host.textContent).toContain("Calculated cost base");
     expect(host.textContent).toContain("Current unit price");
     expect(host.textContent).toContain("Units x Current unit price");
     expect(host.textContent).toContain("$65,000");
+    expect(host.textContent).toContain("Expected sale unit price");
+    expect(host.textContent).toContain("Units x Expected sale unit price");
+    expect(host.textContent).toContain("$75,000");
   });
 });
 

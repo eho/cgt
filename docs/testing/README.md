@@ -20,6 +20,8 @@ Covered areas include:
 - React workspace smoke coverage for the portfolio and scenario comparison views.
 - Portfolio add/edit coverage proving a newly added property exposes editable real-world detail fields.
 - Share parcel coverage proving current value is shown as a calculated value from units and current unit price.
+- Share parcel coverage proving expected sale value is shown as a calculated value from units and expected sale unit price.
+- Portfolio coverage checks calculated property/share cost base and calculated property annual interest are surfaced rather than hidden behind stale manual totals.
 
 Run `bun run build` as the current typecheck and production-build gate.
 

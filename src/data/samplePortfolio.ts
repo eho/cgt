@@ -44,6 +44,7 @@ export const sampleAssets: Asset[] = [
     valueAtPolicyStart: 150_000,
     saleCostEstimate: 400,
     plannedSaleDate: "2028-09-01",
+    plannedSaleUnitPrice: 170,
     plannedSalePrice: 170_000,
   },
   {
