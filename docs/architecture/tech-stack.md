@@ -7,6 +7,9 @@ This project is planned as a web app.
 - Runtime and package manager: Bun
 - Frontend build tool: Vite
 - UI framework: React
+- Language: TypeScript
+- Test runner: Vitest
+- Icon library: lucide-react
 
 ## Package Management
 
@@ -20,4 +23,8 @@ Do not create npm, Yarn, or pnpm lockfiles for this project.
 
 ## Project Commands
 
-No package scripts exist yet. Add canonical development, test, typecheck, lint, and build commands here after the Vite React app is scaffolded.
+- `bun run dev` starts the Vite development server.
+- `bun run build` runs TypeScript project checks and creates a production build.
+- `bun run test` runs domain unit tests with Vitest.
+- `bun run typecheck` runs TypeScript project checks.
+- `bun run lint` currently aliases TypeScript checks until a dedicated linter is added.

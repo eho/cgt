@@ -1,6 +1,8 @@
 # CGT Impact Calculator
 
-Status: Draft
+Status: Implemented
+
+Implemented first pass: Vite React TypeScript app with local-only portfolio state, pure domain calculator modules, scenario and comparison screens, assumptions/sources panels, and Vitest coverage for the main calculation paths. This document remains useful as the design baseline for future iterations.
 
 ## Context
 
