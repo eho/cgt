@@ -1,8 +1,10 @@
 import {
   BarChart3,
   Building2,
+  Calculator,
   FileDown,
   Info,
+  Pencil,
   Plus,
   RotateCcw,
   Scale,
@@ -11,7 +13,6 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { compareAssetScenario } from "../domain/cgt/calculator";
-import { calculateNegativeGearing } from "../domain/cgt/negativeGearing";
 import type { Asset, AssetKind, SaleScenario, TaxProfile } from "../domain/cgt/types";
 import { appAssumptions, policySources } from "../data/policySources";
 import {
@@ -56,8 +57,56 @@ export function App() {
     setState((current) => ({ ...current, profile: { ...current.profile, ...patch } }));
   }
 
-  function updateScenario(patch: Partial<SaleScenario>) {
-    setState((current) => ({ ...current, scenario: { ...current.scenario, ...patch } }));
+  function updateActiveScenario(patch: Partial<SaleScenario>) {
+    setState((current) => {
+      const selectedAsset = patch.assetId ? current.assets.find((asset) => asset.id === patch.assetId) : undefined;
+      const nextScenario = {
+        ...current.scenario,
+        ...patch,
+        saleDate: patch.assetId
+          ? patch.saleDate ?? selectedAsset?.plannedSaleDate ?? current.scenario.saleDate
+          : patch.saleDate ?? current.scenario.saleDate,
+        saleProceeds: patch.assetId
+          ? patch.saleProceeds ?? selectedAsset?.plannedSalePrice ?? selectedAsset?.currentValue ?? current.scenario.saleProceeds
+          : patch.saleProceeds ?? current.scenario.saleProceeds,
+        sellingCosts: patch.assetId
+          ? patch.sellingCosts ?? selectedAsset?.saleCostEstimate ?? current.scenario.sellingCosts
+          : patch.sellingCosts ?? current.scenario.sellingCosts,
+      };
+
+      return {
+        ...current,
+        scenario: nextScenario,
+        assets: current.assets.map((asset) => {
+          if (asset.id !== current.scenario.assetId) {
+            return asset;
+          }
+
+          return {
+            ...asset,
+            plannedSaleDate: patch.saleDate ?? asset.plannedSaleDate,
+            plannedSalePrice: patch.saleProceeds ?? asset.plannedSalePrice,
+            saleCostEstimate: patch.sellingCosts ?? asset.saleCostEstimate,
+          };
+        }),
+      };
+    });
+  }
+
+  function selectAsset(assetId: string) {
+    setState((current) => {
+      const asset = current.assets.find((item) => item.id === assetId);
+      return {
+        ...current,
+        scenario: {
+          ...current.scenario,
+          assetId,
+          saleDate: asset?.plannedSaleDate ?? current.scenario.saleDate,
+          saleProceeds: asset?.plannedSalePrice ?? asset?.currentValue ?? current.scenario.saleProceeds,
+          sellingCosts: asset?.saleCostEstimate ?? current.scenario.sellingCosts,
+        },
+      };
+    });
   }
 
   function updateAsset(assetId: string, patch: Partial<Asset>) {
@@ -75,9 +124,22 @@ export function App() {
       name: kind === "share_parcel" ? "New share parcel" : "New investment property",
       acquisitionDate: "2024-07-01",
       ownershipShare: 1,
+      purchasePrice: kind === "share_parcel" ? undefined : 720_000,
+      stampDuty: kind === "share_parcel" ? undefined : 24_000,
+      buyingCosts: kind === "share_parcel" ? undefined : 6_000,
+      capitalImprovements: kind === "share_parcel" ? undefined : 0,
+      units: kind === "share_parcel" ? 500 : undefined,
+      costPerUnit: kind === "share_parcel" ? 99 : undefined,
+      brokerage: kind === "share_parcel" ? 500 : undefined,
+      costBaseAdjustments: kind === "share_parcel" ? 0 : undefined,
       costBase: kind === "share_parcel" ? 50_000 : 750_000,
+      currentPrice: kind === "share_parcel" ? 130 : undefined,
       currentValue: kind === "share_parcel" ? 65_000 : 800_000,
+      priceAtPolicyStart: kind === "share_parcel" ? 144 : undefined,
       valueAtPolicyStart: kind === "share_parcel" ? 72_000 : 840_000,
+      saleCostEstimate: kind === "share_parcel" ? 300 : 22_000,
+      plannedSaleDate: "2028-09-01",
+      plannedSalePrice: kind === "share_parcel" ? 75_000 : 860_000,
       isEligibleNewBuild: false,
       annualRent: kind === "residential_property" ? 34_000 : undefined,
       loanBalance: kind === "residential_property" ? 650_000 : undefined,
@@ -90,7 +152,13 @@ export function App() {
     setState((current) => ({
       ...current,
       assets: [...current.assets, asset],
-      scenario: { ...current.scenario, assetId: id, saleProceeds: asset.currentValue },
+      scenario: {
+        ...current.scenario,
+        assetId: id,
+        saleDate: asset.plannedSaleDate ?? current.scenario.saleDate,
+        saleProceeds: asset.plannedSalePrice ?? asset.currentValue,
+        sellingCosts: asset.saleCostEstimate ?? current.scenario.sellingCosts,
+      },
     }));
   }
 
@@ -161,8 +229,11 @@ export function App() {
             assets={state.assets}
             scenario={state.scenario}
             profile={state.profile}
+            selectedAsset={selectedAsset}
             onAdd={addAsset}
-            onSelect={(assetId) => updateScenario({ assetId })}
+            onSelect={selectAsset}
+            onAssetChange={(assetId, patch) => updateAsset(assetId, patch)}
+            onScenarioChange={updateActiveScenario}
             onRemove={removeAsset}
           />
         )}
@@ -174,7 +245,7 @@ export function App() {
             scenario={state.scenario}
             result={scenario}
             onProfileChange={updateProfile}
-            onScenarioChange={updateScenario}
+            onScenarioChange={updateActiveScenario}
             onAssetChange={(patch) => updateAsset(selectedAsset.id, patch)}
           />
         )}
@@ -194,15 +265,21 @@ function PortfolioScreen({
   assets,
   scenario,
   profile,
+  selectedAsset,
   onAdd,
   onSelect,
+  onAssetChange,
+  onScenarioChange,
   onRemove,
 }: {
   assets: Asset[];
   scenario: SaleScenario;
   profile: TaxProfile;
+  selectedAsset?: Asset;
   onAdd: (kind: AssetKind) => void;
   onSelect: (assetId: string) => void;
+  onAssetChange: (assetId: string, patch: Partial<Asset>) => void;
+  onScenarioChange: (patch: Partial<SaleScenario>) => void;
   onRemove: (assetId: string) => void;
 }) {
   return (
@@ -210,7 +287,7 @@ function PortfolioScreen({
       <div className="panelHeader">
         <div>
           <h2>Portfolio workspace</h2>
-          <p>Assets stay in this browser. Select a row to drive the scenario and compare screens.</p>
+          <p>Assets stay in this browser. Select a row to edit its details and drive the scenario screens.</p>
         </div>
         <div className="toolbar">
           <button onClick={() => onAdd("residential_property")}>
@@ -221,58 +298,336 @@ function PortfolioScreen({
           </button>
         </div>
       </div>
-      <div className="tableWrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Asset</th>
-              <th>Type</th>
-              <th>Acquired</th>
-              <th>Cost base</th>
-              <th>Current value</th>
-              <th>Unrealised gain</th>
-              <th>Reform exposure</th>
-              <th>Negative gearing</th>
-              <th>Next action</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className="portfolioLayout">
+        <div className="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Asset</th>
+                <th>Type</th>
+                <th>Acquired</th>
+                <th>Cost base</th>
+                <th>Current value</th>
+                <th>Unrealised gain</th>
+                <th>Reform exposure</th>
+                <th>Negative gearing</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
             {assets.map((asset) => {
-              const comparison = compareAssetScenario(asset, { ...scenario, assetId: asset.id }, profile);
-              const ng = comparison.negativeGearing;
-              return (
-                <tr key={asset.id} className={scenario.assetId === asset.id ? "selectedRow" : ""}>
-                  <td>
-                    <button className="linkButton" onClick={() => onSelect(asset.id)}>
-                      {asset.name}
-                    </button>
-                    <div className="muted">{percent(asset.ownershipShare)} owned</div>
-                  </td>
-                  <td>{assetKindLabel(asset.kind)}</td>
-                  <td>{asset.acquisitionDate}</td>
-                  <td>{money(asset.costBase * asset.ownershipShare)}</td>
-                  <td>{money(asset.currentValue * asset.ownershipShare)}</td>
-                  <td>{money((asset.currentValue - asset.costBase) * asset.ownershipShare)}</td>
-                  <td>
-                    <ExposureBadges asset={asset} result={comparison} />
-                  </td>
-                  <td>
-                    <span className={`badge ${ng.status === "quarantined" ? "danger" : "neutral"}`}>
-                      {ng.status.replaceAll("_", " ")}
-                    </span>
-                  </td>
-                  <td>
-                    <button className="iconButton" title="Delete asset" onClick={() => onRemove(asset.id)}>
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              const assetScenario = {
+                ...scenario,
+                assetId: asset.id,
+                saleDate: asset.plannedSaleDate ?? scenario.saleDate,
+                saleProceeds: asset.plannedSalePrice ?? asset.currentValue,
+                sellingCosts: asset.saleCostEstimate ?? scenario.sellingCosts,
+              };
+              const comparison = compareAssetScenario(asset, assetScenario, profile);
+                const ng = comparison.negativeGearing;
+                return (
+                  <tr key={asset.id} className={scenario.assetId === asset.id ? "selectedRow" : ""}>
+                    <td>
+                      <button className="linkButton" onClick={() => onSelect(asset.id)}>
+                        {asset.name}
+                      </button>
+                      <div className="muted">{percent(asset.ownershipShare)} owned</div>
+                    </td>
+                    <td>{assetKindLabel(asset.kind)}</td>
+                    <td>{asset.acquisitionDate}</td>
+                    <td>{money(asset.costBase * asset.ownershipShare)}</td>
+                    <td>{money(asset.currentValue * asset.ownershipShare)}</td>
+                    <td>{money((asset.currentValue - asset.costBase) * asset.ownershipShare)}</td>
+                    <td>
+                      <ExposureBadges asset={asset} result={comparison} />
+                    </td>
+                    <td>
+                      <span className={`badge ${ng.status === "quarantined" ? "danger" : "neutral"}`}>
+                        {ng.status.replaceAll("_", " ")}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="rowActions">
+                        <button className="iconButton" title="Edit asset details" onClick={() => onSelect(asset.id)}>
+                          <Pencil size={16} />
+                        </button>
+                        <button className="iconButton" title="Delete asset" onClick={() => onRemove(asset.id)}>
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {selectedAsset && (
+          <AssetDetailEditor
+            asset={selectedAsset}
+            scenario={scenario}
+            onChange={(patch) => onAssetChange(selectedAsset.id, patch)}
+            onScenarioChange={onScenarioChange}
+          />
+        )}
       </div>
     </section>
+  );
+}
+
+function AssetDetailEditor({
+  asset,
+  scenario,
+  onChange,
+  onScenarioChange,
+}: {
+  asset: Asset;
+  scenario: SaleScenario;
+  onChange: (patch: Partial<Asset>) => void;
+  onScenarioChange: (patch: Partial<SaleScenario>) => void;
+}) {
+  const isProperty = asset.kind === "residential_property" || asset.kind === "commercial_property";
+  const propertyCostBase =
+    (asset.purchasePrice ?? 0) +
+    (asset.stampDuty ?? 0) +
+    (asset.buyingCosts ?? 0) +
+    (asset.capitalImprovements ?? 0);
+  const shareCostBase =
+    (asset.units ?? 0) * (asset.costPerUnit ?? 0) + (asset.brokerage ?? 0) + (asset.costBaseAdjustments ?? 0);
+
+  function updateKind(kind: AssetKind) {
+    onChange({
+      kind,
+      isEligibleNewBuild: kind === "residential_property" ? asset.isEligibleNewBuild ?? false : false,
+    });
+  }
+
+  function updateScenarioAndAsset(patch: Partial<SaleScenario>, assetPatch: Partial<Asset>) {
+    onChange(assetPatch);
+    onScenarioChange(patch);
+  }
+
+  return (
+    <aside className="detailPane">
+      <div className="detailPaneHeader">
+        <div>
+          <h2>Asset details</h2>
+          <p>{assetKindLabel(asset.kind)}</p>
+        </div>
+        <span className="badge neutral">{asset.id === scenario.assetId ? "Active scenario" : "Selected"}</span>
+      </div>
+
+      <div className="detailForm">
+        <label>
+          Asset type
+          <select value={asset.kind} onChange={(event) => updateKind(event.target.value as AssetKind)}>
+            <option value="residential_property">Residential property</option>
+            <option value="commercial_property">Commercial property</option>
+            <option value="share_parcel">Share/ETF parcel</option>
+          </select>
+        </label>
+        <label>
+          Name
+          <input value={asset.name} onChange={(event) => onChange({ name: event.target.value })} />
+        </label>
+        {isProperty && (
+          <label className="span2">
+            Address label
+            <input value={asset.addressLabel ?? ""} onChange={(event) => onChange({ addressLabel: event.target.value })} />
+          </label>
+        )}
+        <label>
+          Acquisition / contract date
+          <input type="date" value={asset.acquisitionDate} onChange={(event) => onChange({ acquisitionDate: event.target.value })} />
+        </label>
+        {isProperty && (
+          <label>
+            Settlement date
+            <input type="date" value={asset.settlementDate ?? ""} onChange={(event) => onChange({ settlementDate: event.target.value })} />
+          </label>
+        )}
+        <label>
+          Ownership share
+          <input
+            type="number"
+            min="0"
+            max="1"
+            step="0.01"
+            value={asset.ownershipShare}
+            onChange={(event) => onChange({ ownershipShare: Number(event.target.value) })}
+          />
+        </label>
+      </div>
+
+      {isProperty ? (
+        <div className="detailForm">
+          <h3 className="formSectionTitle">Property cost base</h3>
+          <label>
+            Purchase price
+            <MoneyInput value={asset.purchasePrice ?? 0} onChange={(purchasePrice) => onChange({ purchasePrice })} />
+          </label>
+          <label>
+            Stamp duty
+            <MoneyInput value={asset.stampDuty ?? 0} onChange={(stampDuty) => onChange({ stampDuty })} />
+          </label>
+          <label>
+            Buying costs
+            <MoneyInput value={asset.buyingCosts ?? 0} onChange={(buyingCosts) => onChange({ buyingCosts })} />
+          </label>
+          <label>
+            Capital improvements
+            <MoneyInput value={asset.capitalImprovements ?? 0} onChange={(capitalImprovements) => onChange({ capitalImprovements })} />
+          </label>
+          <label>
+            Cost base used
+            <MoneyInput value={asset.costBase} onChange={(costBase) => onChange({ costBase })} />
+          </label>
+          <button className="secondaryButton span2" onClick={() => onChange({ costBase: propertyCostBase })}>
+            <Calculator size={16} /> Use property cost components
+          </button>
+          <h3 className="formSectionTitle">Valuation and sale</h3>
+          <label>
+            Current value
+            <MoneyInput value={asset.currentValue} onChange={(currentValue) => onChange({ currentValue })} />
+          </label>
+          <label>
+            1 July 2027 value
+            <MoneyInput value={asset.valueAtPolicyStart ?? 0} onChange={(valueAtPolicyStart) => onChange({ valueAtPolicyStart })} />
+          </label>
+          <label>
+            Expected sale date
+            <input
+              type="date"
+              value={scenario.saleDate}
+              onChange={(event) => updateScenarioAndAsset({ saleDate: event.target.value }, { plannedSaleDate: event.target.value })}
+            />
+          </label>
+          <label>
+            Expected sale price
+            <MoneyInput
+              value={scenario.saleProceeds}
+              onChange={(saleProceeds) => updateScenarioAndAsset({ saleProceeds }, { plannedSalePrice: saleProceeds })}
+            />
+          </label>
+          <label>
+            Selling costs
+            <MoneyInput
+              value={scenario.sellingCosts}
+              onChange={(sellingCosts) => updateScenarioAndAsset({ sellingCosts }, { saleCostEstimate: sellingCosts })}
+            />
+          </label>
+          <h3 className="formSectionTitle">Rental and loan</h3>
+          <label>
+            Loan balance
+            <MoneyInput value={asset.loanBalance ?? 0} onChange={(loanBalance) => onChange({ loanBalance })} />
+          </label>
+          <label>
+            Interest rate
+            <PercentInput value={asset.interestRate ?? 0} onChange={(interestRate) => onChange({ interestRate })} />
+          </label>
+          <label>
+            Annual interest
+            <MoneyInput value={asset.annualInterest ?? 0} onChange={(annualInterest) => onChange({ annualInterest })} />
+          </label>
+          <label>
+            Annual rent
+            <MoneyInput value={asset.annualRent ?? 0} onChange={(annualRent) => onChange({ annualRent })} />
+          </label>
+          <label>
+            Deductible expenses
+            <MoneyInput value={asset.annualDeductibleExpenses ?? 0} onChange={(annualDeductibleExpenses) => onChange({ annualDeductibleExpenses })} />
+          </label>
+          <label>
+            Depreciation / capital works
+            <MoneyInput value={asset.annualDepreciation ?? 0} onChange={(annualDepreciation) => onChange({ annualDepreciation })} />
+          </label>
+          {asset.kind === "residential_property" && (
+            <label className="checkboxLabel">
+              <input
+                type="checkbox"
+                checked={asset.isEligibleNewBuild ?? false}
+                onChange={(event) => onChange({ isEligibleNewBuild: event.target.checked })}
+              />
+              Eligible new build
+            </label>
+          )}
+        </div>
+      ) : (
+        <div className="detailForm">
+          <h3 className="formSectionTitle">Parcel cost base</h3>
+          <label>
+            Units
+            <NumberInput value={asset.units ?? 0} onChange={(units) => onChange({ units, currentValue: units * (asset.currentPrice ?? 0) })} />
+          </label>
+          <label>
+            Cost per unit
+            <MoneyInput value={asset.costPerUnit ?? 0} onChange={(costPerUnit) => onChange({ costPerUnit })} />
+          </label>
+          <label>
+            Brokerage
+            <MoneyInput value={asset.brokerage ?? 0} onChange={(brokerage) => onChange({ brokerage })} />
+          </label>
+          <label>
+            Cost-base adjustments
+            <MoneyInput value={asset.costBaseAdjustments ?? 0} onChange={(costBaseAdjustments) => onChange({ costBaseAdjustments })} />
+          </label>
+          <label>
+            Cost base used
+            <MoneyInput value={asset.costBase} onChange={(costBase) => onChange({ costBase })} />
+          </label>
+          <button className="secondaryButton span2" onClick={() => onChange({ costBase: shareCostBase })}>
+            <Calculator size={16} /> Use parcel cost components
+          </button>
+          <h3 className="formSectionTitle">Price and sale</h3>
+          <label>
+            Current unit price
+            <MoneyInput
+              value={asset.currentPrice ?? 0}
+              onChange={(currentPrice) => onChange({ currentPrice, currentValue: (asset.units ?? 0) * currentPrice })}
+            />
+          </label>
+          <label>
+            Current value
+            <MoneyInput value={asset.currentValue} onChange={(currentValue) => onChange({ currentValue })} />
+          </label>
+          <label>
+            1 July 2027 unit price
+            <MoneyInput
+              value={asset.priceAtPolicyStart ?? 0}
+              onChange={(priceAtPolicyStart) =>
+                onChange({ priceAtPolicyStart, valueAtPolicyStart: (asset.units ?? 0) * priceAtPolicyStart })
+              }
+            />
+          </label>
+          <label>
+            1 July 2027 value
+            <MoneyInput value={asset.valueAtPolicyStart ?? 0} onChange={(valueAtPolicyStart) => onChange({ valueAtPolicyStart })} />
+          </label>
+          <label>
+            Expected sale date
+            <input
+              type="date"
+              value={scenario.saleDate}
+              onChange={(event) => updateScenarioAndAsset({ saleDate: event.target.value }, { plannedSaleDate: event.target.value })}
+            />
+          </label>
+          <label>
+            Expected sale price
+            <MoneyInput
+              value={scenario.saleProceeds}
+              onChange={(saleProceeds) => updateScenarioAndAsset({ saleProceeds }, { plannedSalePrice: saleProceeds })}
+            />
+          </label>
+          <label>
+            Selling costs
+            <MoneyInput
+              value={scenario.sellingCosts}
+              onChange={(sellingCosts) => updateScenarioAndAsset({ sellingCosts }, { saleCostEstimate: sellingCosts })}
+            />
+          </label>
+        </div>
+      )}
+    </aside>
   );
 }
 
@@ -655,4 +1010,17 @@ function MoneyInput({ value, onChange }: { value: number; onChange: (value: numb
 
 function NumberInput({ value, onChange }: { value: number; onChange: (value: number) => void }) {
   return <input type="number" min="0" step="0.1" value={value} onChange={(event) => onChange(Number(event.target.value))} />;
+}
+
+function PercentInput({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  return (
+    <input
+      type="number"
+      min="0"
+      max="100"
+      step="0.1"
+      value={Math.round(value * 1000) / 10}
+      onChange={(event) => onChange(Number(event.target.value) / 100)}
+    />
+  );
 }

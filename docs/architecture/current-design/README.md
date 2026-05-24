@@ -6,13 +6,18 @@ This directory captures the currently implemented CGT Impact Calculator behavior
 
 The app is a Vite React TypeScript single-page application. The first screen is a portfolio workspace, not a marketing landing page. Users can move between:
 
-- Portfolio: local asset inventory for investment properties and share/ETF parcels.
+- Portfolio: local asset inventory for investment properties and share/ETF parcels, with an inline asset-detail editor for the selected row.
 - Scenarios: editable sale, tax profile, CPI, property loan, and property cash-flow assumptions.
 - Compare: preset before/after reform, high/low income, and high/low CPI scenarios.
 - Assumptions: tax-profile settings and explicit modelling assumptions.
 - Sources: source links used by the product research.
 
 Asset data is stored locally in browser `localStorage`. There is no server, account, or sync path in the MVP.
+
+The portfolio editor supports the real-world entry fields needed for the MVP:
+
+- properties: address label, acquisition/contract date, settlement date, ownership share, purchase price, stamp duty, buying costs, capital improvements, cost base used, current value, 1 July 2027 value, expected sale date/price, selling costs, loan balance, interest rate, annual interest, rent, deductible expenses, depreciation/capital works, and eligible-new-build status;
+- share/ETF parcels: units, cost per unit, brokerage, cost-base adjustments, cost base used, current unit price, current value, 1 July 2027 unit price/value, expected sale date/price, and selling costs.
 
 ## Calculation Modules
 

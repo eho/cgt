@@ -18,6 +18,7 @@ Covered areas include:
 - eligible-new-build method choice;
 - negative gearing grandfathering and quarantined losses.
 - React workspace smoke coverage for the portfolio and scenario comparison views.
+- Portfolio add/edit coverage proving a newly added property exposes editable real-world detail fields.
 
 Run `bun run build` as the current typecheck and production-build gate.
 

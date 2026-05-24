@@ -16,11 +16,20 @@ export type Asset = {
   id: string;
   kind: AssetKind;
   name: string;
+  addressLabel?: string;
   acquisitionDate: string;
+  settlementDate?: string;
   ownershipShare: number;
+  purchasePrice?: number;
+  stampDuty?: number;
+  buyingCosts?: number;
+  capitalImprovements?: number;
   costBase: number;
   currentValue: number;
   valueAtPolicyStart?: number;
+  saleCostEstimate?: number;
+  plannedSaleDate?: string;
+  plannedSalePrice?: number;
   isEligibleNewBuild?: boolean;
   loanBalance?: number;
   interestRate?: number;
@@ -28,6 +37,12 @@ export type Asset = {
   annualInterest?: number;
   annualDeductibleExpenses?: number;
   annualDepreciation?: number;
+  units?: number;
+  costPerUnit?: number;
+  brokerage?: number;
+  costBaseAdjustments?: number;
+  currentPrice?: number;
+  priceAtPolicyStart?: number;
 };
 
 export type SaleScenario = {
