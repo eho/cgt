@@ -9,3 +9,9 @@ This directory is the source of truth for project documentation.
 - [Planning](planning/) - roadmap, assessments, milestones, migrations, and ongoing planning notes
 - [Testing](testing/) - QA guides, testing strategy, manual validation, and verification checklists
 - [Operational](operational/) - runbooks, local setup, deployment, CLI usage, and troubleshooting
+
+## Current Product Baseline
+
+- [Product vision](vision/vision.md)
+- [CGT impact calculator design](design/cgt-impact-calculator.md)
+- [Australian CGT reform research notes](planning/cgt-reform-research.md)
