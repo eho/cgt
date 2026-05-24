@@ -28,8 +28,9 @@ describe("App workspace", () => {
     });
 
     expect(host.textContent).toContain("Scenario comparison");
-    expect(host.textContent).toContain("Before reform");
-    expect(host.textContent).toContain("High CPI");
+    expect(host.textContent).toContain("Best next moves");
+    expect(host.textContent).toContain("Sell before reform");
+    expect(host.textContent).toContain("Higher inflation outcome");
   });
 
   it("lets a user add a property and edit its details from the portfolio screen", async () => {
@@ -88,6 +89,36 @@ describe("App workspace", () => {
     expect(host.textContent).toContain("Expected sale unit price");
     expect(host.textContent).toContain("Units x Expected sale unit price");
     expect(host.textContent).toContain("$75,000");
+  });
+
+  it("shows staged sale options for share parcels", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+
+    await act(async () => {
+      createRoot(host).render(<App />);
+    });
+
+    const shareAssetButton = Array.from(host.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "VGS ETF parcel",
+    );
+    expect(shareAssetButton).toBeTruthy();
+
+    await act(async () => {
+      shareAssetButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const compareButton = Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Compare");
+    expect(compareButton).toBeTruthy();
+
+    await act(async () => {
+      compareButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain("Sell in stages");
+    expect(host.textContent).toContain("Sell 25% now");
+    expect(host.textContent).toContain("Sell 50% + 50%");
+    expect(host.textContent).toContain("Compare selling shares in stages");
   });
 });
 

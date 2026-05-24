@@ -12,6 +12,14 @@ export function percent(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
+export function shortDate(value: string): string {
+  return new Intl.DateTimeFormat("en-AU", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(`${value}T00:00:00`));
+}
+
 export function assetKindLabel(kind: AssetKind): string {
   return {
     residential_property: "Residential property",

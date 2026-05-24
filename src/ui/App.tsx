@@ -1,8 +1,10 @@
 import {
   BarChart3,
   Building2,
+  CheckCircle2,
   FileDown,
   Info,
+  Lightbulb,
   Pencil,
   Plus,
   RotateCcw,
@@ -12,6 +14,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { compareAssetScenario } from "../domain/cgt/calculator";
+import { calculateCurrentCgt } from "../domain/cgt/currentRules";
+import { calculateReformCgt } from "../domain/cgt/reform2027";
 import type { Asset, AssetKind, SaleScenario, TaxProfile } from "../domain/cgt/types";
 import { appAssumptions, policySources } from "../data/policySources";
 import {
@@ -20,20 +24,92 @@ import {
   savePortfolioState,
   type PortfolioState,
 } from "../data/portfolioStorage";
-import { assetKindLabel, money, percent } from "./format";
+import { assetKindLabel, money, percent, shortDate } from "./format";
 
 type Screen = "Portfolio" | "Scenarios" | "Compare" | "Assumptions" | "Sources";
 
 const screens: Screen[] = ["Portfolio", "Scenarios", "Compare", "Assumptions", "Sources"];
 
 const scenarioPresets = [
-  { label: "Before reform", saleDate: "2027-06-15", cpiAtSale: 131, income: 150_000 },
-  { label: "Base FY2028", saleDate: "2028-09-01", cpiAtSale: 139, income: 150_000 },
-  { label: "High income", saleDate: "2028-09-01", cpiAtSale: 139, income: 230_000 },
-  { label: "Low income", saleDate: "2028-09-01", cpiAtSale: 139, income: 35_000 },
-  { label: "Low CPI", saleDate: "2029-09-01", cpiAtSale: 140, income: 150_000 },
-  { label: "High CPI", saleDate: "2029-09-01", cpiAtSale: 151, income: 150_000 },
+  {
+    id: "before-reform",
+    label: "Sell before reform",
+    saleDate: "2027-06-15",
+    cpiAtSale: 131,
+    income: 150_000,
+    changed: "Sale happens before 1 July 2027.",
+  },
+  {
+    id: "base-fy2028",
+    label: "Sell after reform",
+    saleDate: "2028-09-01",
+    cpiAtSale: 139,
+    income: 150_000,
+    changed: "Base post-reform sale timing.",
+  },
+  {
+    id: "higher-income",
+    label: "Sell in higher-income year",
+    saleDate: "2028-09-01",
+    cpiAtSale: 139,
+    income: 230_000,
+    changed: "Only your other taxable income changes.",
+  },
+  {
+    id: "lower-income",
+    label: "Sell in lower-income year",
+    saleDate: "2028-09-01",
+    cpiAtSale: 139,
+    income: 35_000,
+    changed: "Only your other taxable income changes.",
+  },
+  {
+    id: "lower-cpi",
+    label: "Lower inflation outcome",
+    saleDate: "2029-09-01",
+    cpiAtSale: 140,
+    income: 150_000,
+    changed: "Later sale with lower CPI indexation.",
+  },
+  {
+    id: "higher-cpi",
+    label: "Higher inflation outcome",
+    saleDate: "2029-09-01",
+    cpiAtSale: 151,
+    income: 150_000,
+    changed: "Later sale with higher CPI indexation.",
+  },
 ];
+
+type ScenarioOutcome = {
+  currentTax: number;
+  reformTax: number;
+  taxDelta: number;
+  proceedsDelta: number;
+  currentAfterTaxProceeds: number;
+  reformAfterTaxProceeds: number;
+  minimumTaxTopUp: number;
+  taxableGain: number;
+};
+
+type DecisionOption = {
+  id: string;
+  label: string;
+  group: "full-sale" | "staged-share";
+  changed: string;
+  takeaway: string;
+  saleDateLabel: string;
+  incomeLabel: string;
+  portionLabel: string;
+  outcome: ScenarioOutcome;
+};
+
+type NextMove = {
+  title: string;
+  detail: string;
+  impact: string;
+  intent?: "good" | "bad";
+};
 
 export function App() {
   const [screen, setScreen] = useState<Screen>("Portfolio");
@@ -189,11 +265,11 @@ export function App() {
         <nav className="nav">
           {screens.map((item) => (
             <button key={item} className={screen === item ? "active" : ""} onClick={() => setScreen(item)}>
-              {item === "Portfolio" && <Building2 size={17} />}
-              {item === "Scenarios" && <Scale size={17} />}
-              {item === "Compare" && <BarChart3 size={17} />}
-              {item === "Assumptions" && <Info size={17} />}
-              {item === "Sources" && <Share2 size={17} />}
+              {item === "Portfolio" && <Building2 aria-hidden="true" size={17} />}
+              {item === "Scenarios" && <Scale aria-hidden="true" size={17} />}
+              {item === "Compare" && <BarChart3 aria-hidden="true" size={17} />}
+              {item === "Assumptions" && <Info aria-hidden="true" size={17} />}
+              {item === "Sources" && <Share2 aria-hidden="true" size={17} />}
               {item}
             </button>
           ))}
@@ -211,15 +287,21 @@ export function App() {
             <p>Compare current CGT settings against announced post-1 July 2027 reform rules.</p>
           </div>
           <div className="toolbar">
-            <button className="iconButton" title="Print or save scenario summary" onClick={() => window.print()}>
-              <FileDown size={17} />
+            <button
+              className="iconButton"
+              title="Print or save scenario summary"
+              aria-label="Print or save scenario summary"
+              onClick={() => window.print()}
+            >
+              <FileDown aria-hidden="true" size={17} />
             </button>
             <button
               className="iconButton"
               title="Reset sample workspace"
+              aria-label="Reset sample workspace"
               onClick={() => setState(clearPortfolioState())}
             >
-              <RotateCcw size={17} />
+              <RotateCcw aria-hidden="true" size={17} />
             </button>
           </div>
         </header>
@@ -291,10 +373,10 @@ function PortfolioScreen({
         </div>
         <div className="toolbar">
           <button onClick={() => onAdd("residential_property")}>
-            <Plus size={16} /> Property
+            <Plus aria-hidden="true" size={16} /> Property
           </button>
           <button onClick={() => onAdd("share_parcel")}>
-            <Plus size={16} /> Share parcel
+            <Plus aria-hidden="true" size={16} /> Share parcel
           </button>
         </div>
       </div>
@@ -349,11 +431,21 @@ function PortfolioScreen({
                     </td>
                     <td>
                       <div className="rowActions">
-                        <button className="iconButton" title="Edit asset details" onClick={() => onSelect(asset.id)}>
-                          <Pencil size={16} />
+                        <button
+                          className="iconButton"
+                          title="Edit asset details"
+                          aria-label={`Edit ${asset.name}`}
+                          onClick={() => onSelect(asset.id)}
+                        >
+                          <Pencil aria-hidden="true" size={16} />
                         </button>
-                        <button className="iconButton" title="Delete asset" onClick={() => onRemove(asset.id)}>
-                          <Trash2 size={16} />
+                        <button
+                          className="iconButton"
+                          title="Delete asset"
+                          aria-label={`Delete ${asset.name}`}
+                          onClick={() => onRemove(asset.id)}
+                        >
+                          <Trash2 aria-hidden="true" size={16} />
                         </button>
                       </div>
                     </td>
@@ -674,8 +766,13 @@ function ScenarioScreen({
   onScenarioChange: (patch: Partial<SaleScenario>) => void;
   onAssetChange: (patch: Partial<Asset>) => void;
 }) {
+  const decisionOptions = useMemo(() => buildDecisionOptions(asset, scenario, profile), [asset, scenario, profile]);
+  const nextMoves = useMemo(() => buildNextMoves(asset, result, decisionOptions), [asset, result, decisionOptions]);
+
   return (
     <div className="scenarioGrid">
+      <BestNextMoves moves={nextMoves} />
+
       <section className="screenPanel">
         <div className="panelHeader">
           <h2>Inputs</h2>
@@ -899,47 +996,442 @@ function ScenarioScreen({
 }
 
 function CompareScreen({ asset, scenario, profile }: { asset: Asset; scenario: SaleScenario; profile: TaxProfile }) {
-  const effectiveAsset = effectiveAssetForCalculation(asset);
+  const options = useMemo(() => buildDecisionOptions(asset, scenario, profile), [asset, scenario, profile]);
+  const currentResult = useMemo(
+    () => compareAssetScenario(effectiveAssetForCalculation(asset), scenario, profile),
+    [asset, scenario, profile],
+  );
+  const nextMoves = useMemo(() => buildNextMoves(asset, currentResult, options), [asset, currentResult, options]);
+  const fullSaleOptions = options.filter((option) => option.group === "full-sale");
+  const stagedShareOptions = options.filter((option) => option.group === "staged-share");
+  const baseOption = fullSaleOptions.find((option) => option.id === "base-fy2028") ?? fullSaleOptions[0];
 
   return (
-    <section className="screenPanel">
+    <div className="compareStack">
+      <BestNextMoves moves={nextMoves} />
+
+      <section className="screenPanel">
+        <div className="panelHeader">
+          <div>
+            <h2>Scenario comparison</h2>
+            <p>{asset.name}: ranked by what is most likely to improve your after-tax position.</p>
+          </div>
+        </div>
+
+        <div className="decisionSummary">
+          <Metric
+            label="Current selection"
+            value={plainDelta(currentResult.proceedsDelta)}
+            intent={currentResult.proceedsDelta >= 0 ? "good" : "bad"}
+          />
+          <Metric label="Best full-sale option" value={bestOptionLabel(fullSaleOptions)} intent="good" />
+          <Metric label="Minimum-tax risk" value={minimumTaxRiskLabel(options)} />
+        </div>
+
+        <OptionTable options={fullSaleOptions} baseOption={baseOption} />
+        <ComparisonBars options={fullSaleOptions} baseOption={baseOption} />
+      </section>
+
+      {stagedShareOptions.length > 0 && (
+        <section className="screenPanel">
+          <div className="panelHeader">
+            <div>
+              <h2>Sell in stages</h2>
+              <p>Planning estimates for selling part of the share parcel instead of all of it at once.</p>
+            </div>
+          </div>
+          <OptionTable options={stagedShareOptions} />
+        </section>
+      )}
+    </div>
+  );
+}
+
+function BestNextMoves({ moves }: { moves: NextMove[] }) {
+  return (
+    <section className="screenPanel bestNextMoves">
       <div className="panelHeader">
         <div>
-          <h2>Scenario comparison</h2>
-          <p>{asset.name}: sale timing, income, and CPI sensitivity.</p>
+          <h2>Best next moves</h2>
+          <p>Plain-English options worth testing before making a sale decision.</p>
         </div>
       </div>
-      <div className="comparisonGrid">
-        {scenarioPresets.map((preset) => {
-          const nextScenario = { ...scenario, saleDate: preset.saleDate, cpiAtSale: preset.cpiAtSale };
-          const nextProfile = { ...profile, nonCgtTaxableIncome: preset.income };
-          const result = compareAssetScenario(effectiveAsset, nextScenario, nextProfile);
-          return (
-            <article className="scenarioCard" key={preset.label}>
-              <div className="scenarioCardHead">
-                <h3>{preset.label}</h3>
-                <Delta value={result.taxDelta} />
-              </div>
-              <dl>
-                <dt>Sale date</dt>
-                <dd>{preset.saleDate}</dd>
-                <dt>Non-CGT income</dt>
-                <dd>{money(preset.income)}</dd>
-                <dt>Current tax</dt>
-                <dd>{money(result.current.totalTax)}</dd>
-                <dt>Reform tax</dt>
-                <dd>{money(result.reform.totalTax)}</dd>
-                <dt>Minimum top-up</dt>
-                <dd>{money(result.reform.minimumTaxTopUp)}</dd>
-                <dt>After-tax proceeds</dt>
-                <dd>{money(result.reform.afterTaxProceeds)}</dd>
-              </dl>
-            </article>
-          );
-        })}
+      <div className="nextMoveList">
+        {moves.map((move) => (
+          <article className={`nextMove ${move.intent ?? ""}`} key={move.title}>
+            <div className="moveIcon">
+              {move.intent === "good" ? <CheckCircle2 aria-hidden="true" size={18} /> : <Lightbulb aria-hidden="true" size={18} />}
+            </div>
+            <div>
+              <h3>{move.title}</h3>
+              <p>{move.detail}</p>
+              <strong>{move.impact}</strong>
+            </div>
+          </article>
+        ))}
       </div>
     </section>
   );
+}
+
+function OptionTable({ options, baseOption }: { options: DecisionOption[]; baseOption?: DecisionOption }) {
+  const displayedOptions = baseOption ? rankOptions(options) : options;
+
+  return (
+    <div className="optionTableWrap">
+      <table className="optionTable">
+        <thead>
+          <tr>
+            <th>Option</th>
+            <th>What changes</th>
+            <th>Portion</th>
+            <th>You keep</th>
+            <th>{baseOption ? "Difference vs base" : "Reform impact"}</th>
+            <th>Tax paid</th>
+            <th>Meaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          {displayedOptions.map((option, index) => {
+            const baselineDelta = baseOption
+              ? option.outcome.reformAfterTaxProceeds - baseOption.outcome.reformAfterTaxProceeds
+              : option.outcome.proceedsDelta;
+            return (
+              <tr key={option.id}>
+                <td>
+                  <strong>{option.label}</strong>
+                  <div className="muted">{option.saleDateLabel}</div>
+                  {baseOption && index === 0 && <span className="badge good">Best in this group</span>}
+                </td>
+                <td>{option.changed}</td>
+                <td>{option.portionLabel}</td>
+                <td>{money(option.outcome.reformAfterTaxProceeds)}</td>
+                <td>
+                  <Delta value={baselineDelta} mode="cash" />
+                </td>
+                <td>{money(option.outcome.reformTax)}</td>
+                <td>{option.takeaway}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ComparisonBars({ options, baseOption }: { options: DecisionOption[]; baseOption?: DecisionOption }) {
+  if (options.length === 0) {
+    return null;
+  }
+
+  const ranked = rankOptions(options);
+  const maxAbsDelta = Math.max(
+    1,
+    ...ranked.map((option) =>
+      Math.abs(option.outcome.reformAfterTaxProceeds - (baseOption?.outcome.reformAfterTaxProceeds ?? 0)),
+    ),
+  );
+
+  return (
+    <div className="comparisonBars" aria-label="Scenario difference chart">
+      {ranked.map((option) => {
+        const value = option.outcome.reformAfterTaxProceeds - (baseOption?.outcome.reformAfterTaxProceeds ?? 0);
+        const width = Math.max(3, Math.round((Math.abs(value) / maxAbsDelta) * 100));
+        return (
+          <div className="barRow" key={option.id}>
+            <span>{option.label}</span>
+            <div className="barTrack">
+              <div className={value >= 0 ? "barFill good" : "barFill bad"} style={{ width: `${width}%` }} />
+            </div>
+            <strong>{plainDelta(value)}</strong>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function buildDecisionOptions(asset: Asset, scenario: SaleScenario, profile: TaxProfile): DecisionOption[] {
+  const effectiveAsset = effectiveAssetForCalculation(asset);
+  const fullSaleOptions = scenarioPresets.map((preset) => {
+    const nextScenario = { ...scenario, saleDate: preset.saleDate, cpiAtSale: preset.cpiAtSale };
+    const nextProfile = { ...profile, nonCgtTaxableIncome: preset.income };
+    const result = compareAssetScenario(effectiveAsset, nextScenario, nextProfile);
+
+    return {
+      id: preset.id,
+      label: preset.label,
+      group: "full-sale" as const,
+      changed: preset.changed,
+      takeaway: scenarioTakeaway(result.proceedsDelta, result.reform.minimumTaxTopUp),
+      saleDateLabel: shortDate(preset.saleDate),
+      incomeLabel: money(preset.income),
+      portionLabel: "All planned sale",
+      outcome: outcomeFromComparison(result),
+    };
+  });
+
+  if (asset.kind !== "share_parcel") {
+    return fullSaleOptions;
+  }
+
+  return [...fullSaleOptions, ...buildStagedShareOptions(asset, scenario, profile)];
+}
+
+function buildStagedShareOptions(asset: Asset, scenario: SaleScenario, profile: TaxProfile): DecisionOption[] {
+  const saleDate = scenario.saleDate;
+  const laterSaleDate = addYears(saleDate, 1);
+  const laterScenario = { ...scenario, saleDate: laterSaleDate, cpiAtSale: scenario.cpiAtSale + 6 };
+  const oneQuarter = compareSinglePartialShareSale(asset, scenario, profile, 0.25);
+  const half = compareSinglePartialShareSale(asset, scenario, profile, 0.5);
+  const stagedHalf = compareShareStagePlan(
+    asset,
+    [
+      { fraction: 0.5, scenario },
+      { fraction: 0.5, scenario: laterScenario },
+    ],
+    profile,
+  );
+
+  return [
+    {
+      id: "share-25-now",
+      label: "Sell 25% now",
+      group: "staged-share",
+      changed: "Only a quarter of the parcel is sold.",
+      takeaway: "Raises less cash now, but keeps most of the holding invested.",
+      saleDateLabel: shortDate(saleDate),
+      incomeLabel: money(profile.nonCgtTaxableIncome),
+      portionLabel: "25%",
+      outcome: oneQuarter,
+    },
+    {
+      id: "share-50-now",
+      label: "Sell 50% now",
+      group: "staged-share",
+      changed: "Half the parcel is sold in the selected tax year.",
+      takeaway: "A middle path: some cash now, less tax event than selling all units.",
+      saleDateLabel: shortDate(saleDate),
+      incomeLabel: money(profile.nonCgtTaxableIncome),
+      portionLabel: "50%",
+      outcome: half,
+    },
+    {
+      id: "share-50-50",
+      label: "Sell 50% + 50%",
+      group: "staged-share",
+      changed: "Half sells now and half sells one year later with CPI lifted by 6 points.",
+      takeaway: "Spreads the tax event across two years; final result depends on future price and income.",
+      saleDateLabel: `${shortDate(saleDate)} and ${shortDate(laterSaleDate)}`,
+      incomeLabel: money(profile.nonCgtTaxableIncome),
+      portionLabel: "100% over 2 years",
+      outcome: stagedHalf,
+    },
+  ];
+}
+
+function compareSinglePartialShareSale(
+  asset: Asset,
+  scenario: SaleScenario,
+  profile: TaxProfile,
+  fraction: number,
+): ScenarioOutcome {
+  return outcomeFromComparison(compareAssetScenario(scaleAssetForSale(asset, fraction), scaleScenarioForSale(scenario, fraction), profile));
+}
+
+function compareShareStagePlan(
+  asset: Asset,
+  stages: { fraction: number; scenario: SaleScenario }[],
+  profile: TaxProfile,
+): ScenarioOutcome {
+  let currentLosses = profile.carriedForwardCapitalLosses;
+  let reformLosses = profile.carriedForwardCapitalLosses;
+  let currentTax = 0;
+  let reformTax = 0;
+  let currentAfterTaxProceeds = 0;
+  let reformAfterTaxProceeds = 0;
+  let minimumTaxTopUp = 0;
+  let taxableGain = 0;
+
+  for (const stage of stages) {
+    const stageAsset = scaleAssetForSale(asset, stage.fraction);
+    const stageScenario = scaleScenarioForSale(stage.scenario, stage.fraction);
+    const current = calculateCurrentCgt(stageAsset, stageScenario, { ...profile, carriedForwardCapitalLosses: currentLosses });
+    const reform = calculateReformCgt(stageAsset, stageScenario, { ...profile, carriedForwardCapitalLosses: reformLosses });
+
+    currentLosses = Math.max(0, currentLosses - current.capitalLossesApplied);
+    reformLosses = Math.max(0, reformLosses - reform.capitalLossesApplied);
+    currentTax += current.totalTax;
+    reformTax += reform.totalTax;
+    currentAfterTaxProceeds += current.afterTaxProceeds;
+    reformAfterTaxProceeds += reform.afterTaxProceeds;
+    minimumTaxTopUp += reform.minimumTaxTopUp;
+    taxableGain += reform.taxableGain;
+  }
+
+  return {
+    currentTax,
+    reformTax,
+    taxDelta: reformTax - currentTax,
+    proceedsDelta: reformAfterTaxProceeds - currentAfterTaxProceeds,
+    currentAfterTaxProceeds,
+    reformAfterTaxProceeds,
+    minimumTaxTopUp,
+    taxableGain,
+  };
+}
+
+function scaleAssetForSale(asset: Asset, fraction: number): Asset {
+  const scaled = {
+    ...asset,
+    units: asset.units === undefined ? undefined : asset.units * fraction,
+    brokerage: asset.brokerage === undefined ? undefined : asset.brokerage * fraction,
+    costBaseAdjustments: asset.costBaseAdjustments === undefined ? undefined : asset.costBaseAdjustments * fraction,
+    costBase: asset.costBase * fraction,
+    currentValue: asset.currentValue * fraction,
+    valueAtPolicyStart: asset.valueAtPolicyStart === undefined ? undefined : asset.valueAtPolicyStart * fraction,
+    plannedSalePrice: asset.plannedSalePrice === undefined ? undefined : asset.plannedSalePrice * fraction,
+  };
+
+  return effectiveAssetForCalculation(scaled);
+}
+
+function scaleScenarioForSale(scenario: SaleScenario, fraction: number): SaleScenario {
+  return {
+    ...scenario,
+    saleProceeds: scenario.saleProceeds * fraction,
+    sellingCosts: scenario.sellingCosts * fraction,
+  };
+}
+
+function outcomeFromComparison(result: ReturnType<typeof compareAssetScenario>): ScenarioOutcome {
+  return {
+    currentTax: result.current.totalTax,
+    reformTax: result.reform.totalTax,
+    taxDelta: result.taxDelta,
+    proceedsDelta: result.proceedsDelta,
+    currentAfterTaxProceeds: result.current.afterTaxProceeds,
+    reformAfterTaxProceeds: result.reform.afterTaxProceeds,
+    minimumTaxTopUp: result.reform.minimumTaxTopUp,
+    taxableGain: result.reform.taxableGain,
+  };
+}
+
+function buildNextMoves(
+  asset: Asset,
+  currentResult: ReturnType<typeof compareAssetScenario>,
+  options: DecisionOption[],
+): NextMove[] {
+  const fullSaleOptions = options.filter((option) => option.group === "full-sale");
+  const stagedShareOptions = options.filter((option) => option.group === "staged-share");
+  const baseOption = fullSaleOptions.find((option) => option.id === "base-fy2028") ?? fullSaleOptions[0];
+  const bestFullSale = rankOptions(fullSaleOptions)[0];
+  const moves: NextMove[] = [];
+
+  if (bestFullSale && baseOption) {
+    const uplift = bestFullSale.outcome.reformAfterTaxProceeds - baseOption.outcome.reformAfterTaxProceeds;
+    moves.push({
+      title: uplift > 0 ? `Test ${bestFullSale.label.toLowerCase()}` : "Keep the current sale timing as your baseline",
+      detail:
+        uplift > 0
+          ? `${bestFullSale.changed} This is the strongest full-sale option in the current assumptions.`
+          : "The current post-reform timing is already close to the best full-sale option in this set.",
+      impact: uplift > 0 ? `${plainDelta(uplift)} versus the base post-reform sale.` : "No better full-sale option found here.",
+      intent: uplift > 0 ? "good" : undefined,
+    });
+  }
+
+  if (asset.kind === "share_parcel" && stagedShareOptions.length > 0) {
+    const stagedHalf = stagedShareOptions.find((option) => option.id === "share-50-50");
+    moves.push({
+      title: "Compare selling shares in stages",
+      detail:
+        "Selling part of a parcel can reduce the size of one tax event and leave some units invested for a later year.",
+      impact: stagedHalf
+        ? `${money(stagedHalf.outcome.reformTax)} estimated reform tax if sold as a 50% + 50% plan.`
+        : "Use the staged-sale rows to compare partial-sale cash and tax.",
+      intent: "good",
+    });
+  }
+
+  if (currentResult.reform.minimumTaxTopUp > 0) {
+    moves.push({
+      title: "Reduce minimum-tax exposure",
+      detail:
+        "The model shows a 30% minimum-tax top-up, so timing, income year, and asset split can materially change the result.",
+      impact: `${money(currentResult.reform.minimumTaxTopUp)} top-up in the current scenario.`,
+      intent: "bad",
+    });
+  } else {
+    moves.push({
+      title: "Minimum tax is not the main issue",
+      detail: "In the current scenario, ordinary tax is high enough that no reform minimum-tax top-up appears.",
+      impact: "Focus on sale timing, income year, and valuation accuracy first.",
+    });
+  }
+
+  if (asset.acquisitionDate < "2027-07-01") {
+    moves.push({
+      title: "Get the 1 July 2027 value right",
+      detail:
+        "For assets already owned before reform, this value controls how much gain is treated under the old rules versus the new indexation rules.",
+      impact: `${money(currentResult.reform.prePolicyTaxableGain ?? 0)} taxable gain is currently treated as pre-reform.`,
+    });
+  }
+
+  if (asset.kind === "residential_property" && currentResult.negativeGearing.quarantinedLoss > 0) {
+    moves.push({
+      title: "Model the rental cash-flow hit",
+      detail: "A quarantined rental loss means the loss may not reduce your salary or other income tax immediately.",
+      impact: `${money(currentResult.negativeGearing.quarantinedLoss)} estimated quarantined loss.`,
+      intent: "bad",
+    });
+  }
+
+  return moves.slice(0, 4);
+}
+
+function rankOptions(options: DecisionOption[]): DecisionOption[] {
+  return [...options].sort((a, b) => b.outcome.reformAfterTaxProceeds - a.outcome.reformAfterTaxProceeds);
+}
+
+function bestOptionLabel(options: DecisionOption[]): string {
+  return rankOptions(options)[0]?.label ?? "Not available";
+}
+
+function minimumTaxRiskLabel(options: DecisionOption[]): string {
+  const maxTopUp = Math.max(0, ...options.map((option) => option.outcome.minimumTaxTopUp));
+  return maxTopUp > 0 ? `${money(maxTopUp)} possible top-up` : "No top-up shown";
+}
+
+function scenarioTakeaway(proceedsDelta: number, minimumTaxTopUp: number): string {
+  if (minimumTaxTopUp > 0) {
+    return "Watch the minimum-tax top-up; this option may be worse than it first looks.";
+  }
+  if (proceedsDelta > 0) {
+    return `Reform leaves you with ${money(proceedsDelta)} more than current rules.`;
+  }
+  if (proceedsDelta < 0) {
+    return `Reform leaves you with ${money(Math.abs(proceedsDelta))} less than current rules.`;
+  }
+  return "No material difference between current rules and reform.";
+}
+
+function plainDelta(value: number): string {
+  if (Math.abs(value) < 1) {
+    return "No change";
+  }
+
+  return value > 0 ? `${money(value)} more` : `${money(Math.abs(value))} less`;
+}
+
+function addYears(date: string, years: number): string {
+  const next = new Date(`${date}T00:00:00`);
+  next.setFullYear(next.getFullYear() + years);
+  const month = String(next.getMonth() + 1).padStart(2, "0");
+  const day = String(next.getDate()).padStart(2, "0");
+  return `${next.getFullYear()}-${month}-${day}`;
 }
 
 function AssumptionsScreen({
@@ -1051,9 +1543,19 @@ function Metric({ label, value, intent }: { label: string; value: string; intent
   );
 }
 
-function Delta({ value }: { value: number }) {
-  const intent = value > 0 ? "bad" : value < 0 ? "good" : "neutral";
-  return <span className={`delta ${intent}`}>{value === 0 ? "No tax delta" : `${value > 0 ? "+" : ""}${money(value)}`}</span>;
+function Delta({ value, mode = "tax" }: { value: number; mode?: "tax" | "cash" }) {
+  const isGood = mode === "tax" ? value < 0 : value > 0;
+  const isBad = mode === "tax" ? value > 0 : value < 0;
+  const intent = isBad ? "bad" : isGood ? "good" : "neutral";
+  const label =
+    mode === "cash"
+      ? plainDelta(value)
+      : value === 0
+        ? "No tax change"
+        : value > 0
+          ? `${money(value)} extra tax`
+          : `${money(Math.abs(value))} tax saving`;
+  return <span className={`delta ${intent}`}>{label}</span>;
 }
 
 function MoneyInput({ value, onChange, step = 1000 }: { value: number; onChange: (value: number) => void; step?: number }) {

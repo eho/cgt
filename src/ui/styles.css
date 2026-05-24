@@ -111,6 +111,19 @@ button {
   color: var(--text);
 }
 
+button:hover,
+.sourceList a:hover {
+  border-color: var(--soft);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid rgba(23, 92, 211, 0.22);
+  outline-offset: 2px;
+}
+
 .sidebarNote {
   position: absolute;
   right: 18px;
@@ -357,6 +370,7 @@ th {
   color: var(--red);
 }
 
+.badge.good,
 .delta.good,
 .metric.good {
   background: var(--green-bg);
@@ -375,6 +389,10 @@ th {
   gap: 16px;
   max-width: 1420px;
   margin: 0 auto;
+}
+
+.scenarioGrid .bestNextMoves {
+  grid-column: 1 / -1;
 }
 
 .formGrid {
@@ -521,6 +539,139 @@ dt {
   padding: 14px;
 }
 
+.compareStack {
+  display: grid;
+  gap: 16px;
+  max-width: 1420px;
+  margin: 0 auto;
+}
+
+.decisionSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px;
+}
+
+.nextMoveList {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+
+.nextMove {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  padding: 13px;
+}
+
+.nextMove.good {
+  border-color: #abefc6;
+  background: var(--green-bg);
+}
+
+.nextMove.bad {
+  border-color: #fecdca;
+  background: var(--red-bg);
+}
+
+.moveIcon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--blue);
+}
+
+.nextMove.good .moveIcon {
+  background: white;
+  color: var(--green);
+}
+
+.nextMove.bad .moveIcon {
+  background: white;
+  color: var(--red);
+}
+
+.nextMove h3,
+.nextMove p {
+  margin: 0;
+}
+
+.nextMove p {
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.nextMove strong {
+  display: block;
+  margin-top: 8px;
+}
+
+.optionTableWrap {
+  overflow: auto;
+  padding: 0 14px 14px;
+}
+
+.optionTable {
+  min-width: 980px;
+}
+
+.optionTable td:nth-child(4),
+.optionTable td:nth-child(5),
+.optionTable td:nth-child(6),
+.scenarioCard dd,
+.metric strong,
+.waterfall strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.comparisonBars {
+  display: grid;
+  gap: 9px;
+  border-top: 1px solid var(--line);
+  padding: 14px;
+}
+
+.barRow {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.7fr) minmax(180px, 1fr) 120px;
+  align-items: center;
+  gap: 10px;
+}
+
+.barRow span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.barTrack {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.barFill {
+  height: 100%;
+  border-radius: inherit;
+}
+
+.barFill.good {
+  background: var(--green);
+}
+
+.barFill.bad {
+  background: var(--red);
+}
+
 .scenarioCard {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -607,6 +758,8 @@ dt {
 
   .scenarioGrid,
   .comparisonGrid,
+  .decisionSummary,
+  .nextMoveList,
   .twoColumn,
   .portfolioLayout {
     grid-template-columns: 1fr;
@@ -639,7 +792,12 @@ dt {
 
   .formGrid,
   .metricsGrid,
+  .decisionSummary,
   .detailForm {
+    grid-template-columns: 1fr;
+  }
+
+  .barRow {
     grid-template-columns: 1fr;
   }
 }

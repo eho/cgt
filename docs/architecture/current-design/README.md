@@ -8,7 +8,7 @@ The app is a Vite React TypeScript single-page application. The first screen is 
 
 - Portfolio: local asset inventory for investment properties and share/ETF parcels, with an inline asset-detail editor for the selected row.
 - Scenarios: editable sale, tax profile, CPI, property loan, and property cash-flow assumptions.
-- Compare: preset before/after reform, high/low income, and high/low CPI scenarios.
+- Compare: best-next-move guidance, ranked full-sale scenarios, before/after reform timing, high/low income, high/low CPI, and staged share-sale planning estimates.
 - Assumptions: tax-profile settings and explicit modelling assumptions.
 - Sources: source links used by the product research.
 
@@ -18,6 +18,8 @@ The portfolio editor supports the real-world entry fields needed for the MVP:
 
 - properties: address label, acquisition/contract date, settlement date, ownership share, purchase price, stamp duty, buying costs, capital improvements, calculated cost base, current value, 1 July 2027 value, expected sale date/price, selling costs, loan balance, interest rate, calculated annual interest, optional annual-interest override, rent, deductible expenses, depreciation/capital works, and eligible-new-build status;
 - share/ETF parcels: units, cost per unit, brokerage, cost-base adjustments, calculated cost base, current unit price, calculated current value, 1 July 2027 unit price/calculated value, expected sale date, expected sale unit price/calculated sale value, and selling costs.
+
+The scenario and compare screens are decision-oriented rather than only numeric. They surface plain-English next moves, such as testing a lower-income sale year, checking the 1 July 2027 valuation, reviewing minimum-tax exposure, or comparing staged share sales. Share parcel comparison includes 25%, 50%, and 50% + 50% staged-sale planning rows. Multi-stage rows sequence carried-forward capital losses across stages so the same loss is not counted twice in the estimate.
 
 ## Calculation Modules
 
