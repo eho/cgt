@@ -62,6 +62,27 @@ describe("App workspace", () => {
 
     expect(host.textContent).toContain("My rental property");
   });
+
+  it("calculates share parcel current value from units and current unit price", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+
+    await act(async () => {
+      createRoot(host).render(<App />);
+    });
+
+    const shareButton = Array.from(host.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Share parcel");
+    expect(shareButton).toBeTruthy();
+
+    await act(async () => {
+      shareButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain("Parcel cost base");
+    expect(host.textContent).toContain("Current unit price");
+    expect(host.textContent).toContain("Units x Current unit price");
+    expect(host.textContent).toContain("$65,000");
+  });
 });
 
 function setInputValue(input: HTMLInputElement, value: string) {

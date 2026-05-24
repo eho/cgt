@@ -397,7 +397,8 @@ label {
 }
 
 input,
-select {
+select,
+.calculatedValue {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -405,6 +406,23 @@ select {
   color: var(--text);
   padding: 9px 10px;
   font-weight: 650;
+}
+
+.calculatedValue {
+  display: grid;
+  gap: 2px;
+  min-height: 40px;
+  background: var(--surface-2);
+}
+
+.calculatedValue strong {
+  color: var(--text);
+}
+
+.calculatedValue span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
 }
 
 .checkboxLabel {

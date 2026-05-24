@@ -394,6 +394,8 @@ function AssetDetailEditor({
     (asset.capitalImprovements ?? 0);
   const shareCostBase =
     (asset.units ?? 0) * (asset.costPerUnit ?? 0) + (asset.brokerage ?? 0) + (asset.costBaseAdjustments ?? 0);
+  const calculatedCurrentValue = calculatedShareCurrentValue(asset);
+  const calculatedPolicyStartValue = calculatedSharePolicyStartValue(asset);
 
   function updateKind(kind: AssetKind) {
     onChange({
@@ -557,11 +559,20 @@ function AssetDetailEditor({
           <h3 className="formSectionTitle">Parcel cost base</h3>
           <label>
             Units
-            <NumberInput value={asset.units ?? 0} onChange={(units) => onChange({ units, currentValue: units * (asset.currentPrice ?? 0) })} />
+            <NumberInput
+              value={asset.units ?? 0}
+              onChange={(units) =>
+                onChange({
+                  units,
+                  currentValue: units * (asset.currentPrice ?? 0),
+                  valueAtPolicyStart: units * (asset.priceAtPolicyStart ?? 0),
+                })
+              }
+            />
           </label>
           <label>
             Cost per unit
-            <MoneyInput value={asset.costPerUnit ?? 0} onChange={(costPerUnit) => onChange({ costPerUnit })} />
+            <MoneyInput step={0.01} value={asset.costPerUnit ?? 0} onChange={(costPerUnit) => onChange({ costPerUnit })} />
           </label>
           <label>
             Brokerage
@@ -582,17 +593,19 @@ function AssetDetailEditor({
           <label>
             Current unit price
             <MoneyInput
+              step={0.01}
               value={asset.currentPrice ?? 0}
               onChange={(currentPrice) => onChange({ currentPrice, currentValue: (asset.units ?? 0) * currentPrice })}
             />
           </label>
           <label>
             Current value
-            <MoneyInput value={asset.currentValue} onChange={(currentValue) => onChange({ currentValue })} />
+            <CalculatedValue value={calculatedCurrentValue} formula="Units x Current unit price" />
           </label>
           <label>
             1 July 2027 unit price
             <MoneyInput
+              step={0.01}
               value={asset.priceAtPolicyStart ?? 0}
               onChange={(priceAtPolicyStart) =>
                 onChange({ priceAtPolicyStart, valueAtPolicyStart: (asset.units ?? 0) * priceAtPolicyStart })
@@ -601,7 +614,7 @@ function AssetDetailEditor({
           </label>
           <label>
             1 July 2027 value
-            <MoneyInput value={asset.valueAtPolicyStart ?? 0} onChange={(valueAtPolicyStart) => onChange({ valueAtPolicyStart })} />
+            <CalculatedValue value={calculatedPolicyStartValue} formula="Units x 1 July 2027 unit price" />
           </label>
           <label>
             Expected sale date
@@ -681,11 +694,19 @@ function ScenarioScreen({
           </label>
           <label>
             Current value
-            <MoneyInput value={asset.currentValue} onChange={(currentValue) => onAssetChange({ currentValue })} />
+            {asset.kind === "share_parcel" ? (
+              <CalculatedValue value={calculatedShareCurrentValue(asset)} formula="Units x Current unit price" />
+            ) : (
+              <MoneyInput value={asset.currentValue} onChange={(currentValue) => onAssetChange({ currentValue })} />
+            )}
           </label>
           <label>
             1 July 2027 value
-            <MoneyInput value={asset.valueAtPolicyStart ?? 0} onChange={(valueAtPolicyStart) => onAssetChange({ valueAtPolicyStart })} />
+            {asset.kind === "share_parcel" ? (
+              <CalculatedValue value={calculatedSharePolicyStartValue(asset)} formula="Units x 1 July 2027 unit price" />
+            ) : (
+              <MoneyInput value={asset.valueAtPolicyStart ?? 0} onChange={(valueAtPolicyStart) => onAssetChange({ valueAtPolicyStart })} />
+            )}
           </label>
           <label>
             Sale date
@@ -1004,8 +1025,8 @@ function Delta({ value }: { value: number }) {
   return <span className={`delta ${intent}`}>{value === 0 ? "No tax delta" : `${value > 0 ? "+" : ""}${money(value)}`}</span>;
 }
 
-function MoneyInput({ value, onChange }: { value: number; onChange: (value: number) => void }) {
-  return <input type="number" min="0" step="1000" value={value} onChange={(event) => onChange(Number(event.target.value))} />;
+function MoneyInput({ value, onChange, step = 1000 }: { value: number; onChange: (value: number) => void; step?: number }) {
+  return <input type="number" min="0" step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />;
 }
 
 function NumberInput({ value, onChange }: { value: number; onChange: (value: number) => void }) {
@@ -1023,4 +1044,21 @@ function PercentInput({ value, onChange }: { value: number; onChange: (value: nu
       onChange={(event) => onChange(Number(event.target.value) / 100)}
     />
   );
+}
+
+function CalculatedValue({ value, formula }: { value: number; formula: string }) {
+  return (
+    <div className="calculatedValue">
+      <strong>{money(value)}</strong>
+      <span>{formula}</span>
+    </div>
+  );
+}
+
+function calculatedShareCurrentValue(asset: Asset): number {
+  return (asset.units ?? 0) * (asset.currentPrice ?? 0);
+}
+
+function calculatedSharePolicyStartValue(asset: Asset): number {
+  return (asset.units ?? 0) * (asset.priceAtPolicyStart ?? 0);
 }

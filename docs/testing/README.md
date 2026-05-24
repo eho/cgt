@@ -19,6 +19,7 @@ Covered areas include:
 - negative gearing grandfathering and quarantined losses.
 - React workspace smoke coverage for the portfolio and scenario comparison views.
 - Portfolio add/edit coverage proving a newly added property exposes editable real-world detail fields.
+- Share parcel coverage proving current value is shown as a calculated value from units and current unit price.
 
 Run `bun run build` as the current typecheck and production-build gate.
 
